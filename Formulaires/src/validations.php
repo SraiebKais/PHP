@@ -1,7 +1,10 @@
 <?php
 
+session_start();
+
 $errors = [];
 $data = [];
+$success_message = "";
 
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
   $safe_post = sanitize_input($_POST);
@@ -9,12 +12,19 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
   $data = $safe_post;
 
   if (empty($errors)) {
-    echo "Inscription réussie";
+    // If no errors, set a success message and clear submitted data
+    $success_message = "Votre inscription a été traitée avec succès !";
+    $_SESSION["success_message"] = $success_message;
+    $_SESSION["data"] = []; // Clear data on success
   } else {
-    echo "<pre>";
-    var_dump($errors);
-    echo "</pre>";
+    // If there are errors, store them and the submitted data in session
+    $_SESSION["errors"] = $errors;
+    $_SESSION["data"] = $data;
   }
+
+  // Redirect back to index.php to display results
+  header("Location: index.php");
+  exit();
 }
 
 /**
@@ -27,7 +37,14 @@ function sanitize_input($data)
 {
   $nouv_data = [];
   foreach ($data as $k => $v) {
-    $nouv_data[$k] = htmlspecialchars(trim($v), ENT_QUOTES, "UTF-8");
+    // Check if $v is an array, if so, process each element
+    if (is_array($v)) {
+      $nouv_data[$k] = array_map(function ($item) {
+        return htmlspecialchars(trim($item), ENT_QUOTES, "UTF-8");
+      }, $v);
+    } else {
+      $nouv_data[$k] = htmlspecialchars(trim($v), ENT_QUOTES, "UTF-8");
+    }
   }
   return $nouv_data;
 }
@@ -36,7 +53,7 @@ function sanitize_input($data)
  * Validates the form input data against a set of rules.
  *
  * @param array $input The sanitized input data from the form.
- * @return array An associative array of errors, where the key is the field name and the value is the error message.
+ * @return array An associative array of errors, where the key is the field name and the value is the error message.\
  */
 function validate_form($input)
 {
@@ -51,23 +68,27 @@ function validate_form($input)
       "Le nom ne doit pas être vide et doit avoir une longueur entre 3 et 50 caractères.";
   }
 
-  if (!filter_var($input["email"], FILTER_VALIDATE_EMAIL)) {
+  if (empty($input["email"]) || !filter_var($input["email"], FILTER_VALIDATE_EMAIL)) {
     $errors["email"] = "Email invalide.";
   }
 
-  if (!preg_match('/^[a-zA-Z0-9]{5,20}$/', $input["nom_utilisateur"])) {
-    // Corrected error message for nom_utilisateur
+  if (
+    empty($input["nom_utilisateur"]) ||
+    !preg_match('/^[a-zA-Z0-9]{5,20}$/', $input["nom_utilisateur"])
+  ) {
     $errors["nom_utilisateur"] =
       "Le nom d'utilisateur doit contenir entre 5 et 20 caractères alphanumériques.";
   }
 
-  if (!preg_match('/^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[\W_]).{8,}$/', $input["mdp"])) {
-    // Changed key to 'mdp' to match input field name
+  if (
+    empty($input["mdp"]) ||
+    !preg_match('/^(?=.*[A-Z])(?=.*[a-z])(?=.*\\d)(?=.*[\\W_]).{8,}$/', $input["mdp"])
+  ) {
     $errors["mdp"] =
       "Le mot de passe doit contenir au moins une majuscule, une minuscule, un chiffre et un symbole, et faire au moins 8 caractères.";
   }
 
-  if ($input["mdp"] !== $input["conf_mdp"]) {
+  if (empty($input["conf_mdp"]) || $input["mdp"] !== $input["conf_mdp"]) {
     $errors["conf_mdp"] = "Les mots de passe ne correspondent pas.";
   }
 
@@ -87,7 +108,7 @@ function validate_form($input)
     }
   }
 
-  if (!preg_match('/^\+?[0-9\s\-]{7,15}$/', $input["tel"])) {
+  if (empty($input["tel"]) || !preg_match('/^\\+?[0-9\\s\\-]{7,15}$/', $input["tel"])) {
     $errors["tel"] = "Numéro de téléphone invalide.";
   }
 
